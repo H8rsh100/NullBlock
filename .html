@@ -178,12 +178,16 @@ select option{background:var(--surface)}
         <div><label>Port</label><input id="t-port" placeholder="443, 22, 8080..."></div>
         <div><label>Protocol</label><input id="t-proto" placeholder="TCP / UDP"></div>
       </div>
-      <div class="grid2">
+      <div class="grid3">
         <div>
           <label>Reporter *</label>
           <select id="t-reporter">
             <option value="">-- SELECT ANALYST --</option>
           </select>
+        </div>
+        <div>
+          <label>Private Key (.json) *</label>
+          <input type="file" id="t-keyfile" accept=".json">
         </div>
         <div><label>Notes</label><input id="t-notes" placeholder="Additional context..."></div>
       </div>
@@ -224,7 +228,13 @@ select option{background:var(--surface)}
           </select>
         </div>
       </div>
-      <div class="mb"><label>Notes</label><input id="m-notes" placeholder="Behavior, CVE reference, source..."></div>
+      <div class="grid2">
+        <div>
+          <label>Private Key (.json) *</label>
+          <input type="file" id="m-keyfile" accept=".json">
+        </div>
+        <div><label>Notes</label><input id="m-notes" placeholder="Behavior, CVE reference, source..."></div>
+      </div>
       <div class="btn-row">
         <button class="btn btn-green" onclick="logMalware()">COMMIT & SIGN TO CHAIN</button>
         <button class="btn btn-ghost" onclick="clearForm('m')">CLEAR</button>
@@ -298,7 +308,7 @@ select option{background:var(--surface)}
       </div>
       <div class="btn-row">
         <button class="btn btn-danger" onclick="searchChain()">SEARCH</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('search-results').innerHTML=''">CLEAR</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('s-ip').value='';document.getElementById('s-name').value='';document.getElementById('s-hash').value='';document.getElementById('search-results').innerHTML=''">CLEAR</button>
       </div>
     </div>
     <div id="search-results"></div>
@@ -423,26 +433,39 @@ async function registerAnalystUI() {
     const hashBuffer = await window.crypto.subtle.digest("SHA-256", spki);
     const fingerprint = "SHA256:" + Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
     
+    // Store only the public registry details in localStorage
     analysts[name] = {
-      privateKey: privJwk,
       publicKey: pubJwk,
       fingerprint: fingerprint
     };
     saveAnalysts(analysts);
+
+    // Trigger secure private key file download
+    const keyData = {
+      name: name,
+      fingerprint: fingerprint,
+      privateKey: privJwk
+    };
+    const blob = new Blob([JSON.stringify(keyData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${name.replace(/[^a-z0-9]/gi, '_')}_private_key.json`;
+    a.click();
+    
     document.getElementById('a-name').value = '';
-    showStatus('a-status', 'ok', `✓ Analyst '${name}' registered successfully!`);
+    showStatus('a-status', 'ok', `✓ Analyst '${name}' registered! Private key downloaded. KEEP IT SAFE.`);
   } catch (e) {
     showStatus('a-status', 'err', 'Failed to generate keypair: ' + e.message);
   }
 }
  
-async function addBlock(data, type, reporter) {
+async function addBlock(data, type, reporter, privateKeyJwk) {
   const chain = loadChain();
   const prev = chain[chain.length - 1];
   
   const analysts = loadAnalysts();
   const analyst = analysts[reporter];
-  if (!analyst) throw new Error("Reporter private key not found.");
+  if (!analyst) throw new Error("Reporter registry not found.");
   
   const block = {
     index: chain.length,
@@ -459,7 +482,7 @@ async function addBlock(data, type, reporter) {
   
   const privKey = await window.crypto.subtle.importKey(
     "jwk",
-    analyst.privateKey,
+    privateKeyJwk,
     { name: "RSA-PSS", hash: "SHA-256" },
     true,
     ["sign"]
@@ -507,20 +530,38 @@ async function logThreat() {
   const type = document.getElementById('t-type').value.trim();
   const sev = document.getElementById('t-sev').value;
   const reporter = document.getElementById('t-reporter').value;
+  const fileEl = document.getElementById('t-keyfile');
+  
   if (!ip || !type || !reporter) { showStatus('t-status','err','IP address, attack type, and reporter are required.'); return; }
-  const data = {
-    ip_address: ip, attack_type: type, severity: sev,
-    port: document.getElementById('t-port').value || 'unknown',
-    protocol: document.getElementById('t-proto').value || 'unknown',
-    notes: document.getElementById('t-notes').value || ''
+  if (!fileEl.files || !fileEl.files[0]) { showStatus('t-status','err','Private key file (.json) is required to sign this block.'); return; }
+  
+  const file = fileEl.files[0];
+  const reader = new FileReader();
+  
+  reader.onload = async function(e) {
+    try {
+      const keyData = JSON.parse(e.target.result);
+      if (keyData.name !== reporter) {
+        showStatus('t-status','err',`Key file name '${keyData.name}' does not match selected reporter '${reporter}'.`);
+        return;
+      }
+      
+      const data = {
+        ip_address: ip, attack_type: type, severity: sev,
+        port: document.getElementById('t-port').value || 'unknown',
+        protocol: document.getElementById('t-proto').value || 'unknown',
+        notes: document.getElementById('t-notes').value || ''
+      };
+      
+      const block = await addBlock(data, 'THREAT', reporter, keyData.privateKey);
+      showStatus('t-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
+      clearForm('t');
+    } catch (err) {
+      showStatus('t-status','err','Commit failed: ' + err.message);
+    }
   };
-  try {
-    const block = await addBlock(data, 'THREAT', reporter);
-    showStatus('t-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
-    clearForm('t');
-  } catch (e) {
-    showStatus('t-status','err','Commit failed: ' + e.message);
-  }
+  
+  reader.readAsText(file);
 }
  
 // ── Log Malware ──
@@ -529,20 +570,38 @@ async function logMalware() {
   const name = document.getElementById('m-name').value.trim();
   const family = document.getElementById('m-family').value.trim();
   const reporter = document.getElementById('m-reporter').value;
+  const fileEl = document.getElementById('m-keyfile');
+  
   if (!hash || !name || !family || !reporter) { showStatus('m-status','err','Hash, name, family, and reporter are required.'); return; }
-  const data = {
-    hash, name, family,
-    hash_type: document.getElementById('m-hashtype').value,
-    severity: document.getElementById('m-sev').value,
-    notes: document.getElementById('m-notes').value || ''
+  if (!fileEl.files || !fileEl.files[0]) { showStatus('m-status','err','Private key file (.json) is required to sign this block.'); return; }
+  
+  const file = fileEl.files[0];
+  const reader = new FileReader();
+  
+  reader.onload = async function(e) {
+    try {
+      const keyData = JSON.parse(e.target.result);
+      if (keyData.name !== reporter) {
+        showStatus('m-status','err',`Key file name '${keyData.name}' does not match selected reporter '${reporter}'.`);
+        return;
+      }
+      
+      const data = {
+        hash, name, family,
+        hash_type: document.getElementById('m-hashtype').value,
+        severity: document.getElementById('m-sev').value,
+        notes: document.getElementById('m-notes').value || ''
+      };
+      
+      const block = await addBlock(data, 'MALWARE', reporter, keyData.privateKey);
+      showStatus('m-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
+      clearForm('m');
+    } catch (err) {
+      showStatus('m-status','err','Commit failed: ' + err.message);
+    }
   };
-  try {
-    const block = await addBlock(data, 'MALWARE', reporter);
-    showStatus('m-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
-    clearForm('m');
-  } catch (e) {
-    showStatus('m-status','err','Commit failed: ' + e.message);
-  }
+  
+  reader.readAsText(file);
 }
  
 // ── Render Chain ──
@@ -728,8 +787,8 @@ function showStatus(id, type, msg) {
  
 function clearForm(prefix) {
   const ids = prefix === 't'
-    ? ['t-ip','t-type','t-port','t-proto','t-notes']
-    : ['m-hash','m-name','m-family','m-notes'];
+    ? ['t-ip','t-type','t-port','t-proto','t-notes','t-keyfile']
+    : ['m-hash','m-name','m-family','m-notes','m-keyfile'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   
   const repEl = document.getElementById(prefix + '-reporter');
