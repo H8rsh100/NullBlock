@@ -246,12 +246,12 @@ def validate_chain(chain: list) -> tuple:
 def cmd_register_analyst(args):
     try:
         priv_path, pub_path, fingerprint = register_analyst(args.name, args.bits)
-        print(f"\n{Fore.GREEN}✅ Analyst '{args.name}' registered successfully!{Style.RESET_ALL}")
+        print(f"\n{Fore.GREEN}[+] Analyst '{args.name}' registered successfully!{Style.RESET_ALL}")
         print(f"   Fingerprint: {Fore.CYAN}{fingerprint}{Style.RESET_ALL}")
         print(f"   Private Key: {priv_path}")
         print(f"   Public Key : {pub_path}\n")
     except Exception as e:
-        print(f"\n{Fore.RED}❌ Registration failed: {e}{Style.RESET_ALL}\n")
+        print(f"\n{Fore.RED}[-] Registration failed: {e}{Style.RESET_ALL}\n")
  
  
 def cmd_add_threat(args):
@@ -267,7 +267,7 @@ def cmd_add_threat(args):
     try:
         block = add_block(data, "THREAT", args.reporter)
         sc = severity_colors.get(data["severity"], Fore.WHITE)
-        print(f"\n{Fore.GREEN}✅ Threat logged and signed on NullBlock chain{Style.RESET_ALL}")
+        print(f"\n{Fore.GREEN}[+] Threat logged and signed on NullBlock chain{Style.RESET_ALL}")
         print(f"   Block Index  : {Fore.CYAN}#{block['index']}{Style.RESET_ALL}")
         print(f"   Block Hash   : {Fore.YELLOW}{block['hash'][:32]}...{Style.RESET_ALL}")
         print(f"   Reporter     : {Fore.WHITE}{block['reporter']}{Style.RESET_ALL}")
@@ -278,7 +278,7 @@ def cmd_add_threat(args):
         print(f"   Severity     : {sc}{data['severity']}{Style.RESET_ALL}")
         print(f"   Timestamp    : {Style.DIM}{block['timestamp']}{Style.RESET_ALL}\n")
     except Exception as e:
-        print(f"\n{Fore.RED}❌ Failed to log threat: {e}{Style.RESET_ALL}\n")
+        print(f"\n{Fore.RED}[-] Failed to log threat: {e}{Style.RESET_ALL}\n")
  
  
 def cmd_add_malware(args):
@@ -292,7 +292,7 @@ def cmd_add_malware(args):
     }
     try:
         block = add_block(data, "MALWARE", args.reporter)
-        print(f"\n{Fore.GREEN}✅ Malware signature logged and signed on NullBlock chain{Style.RESET_ALL}")
+        print(f"\n{Fore.GREEN}[+] Malware signature logged and signed on NullBlock chain{Style.RESET_ALL}")
         print(f"   Block Index  : {Fore.CYAN}#{block['index']}{Style.RESET_ALL}")
         print(f"   Block Hash   : {Fore.YELLOW}{block['hash'][:32]}...{Style.RESET_ALL}")
         print(f"   Reporter     : {Fore.WHITE}{block['reporter']}{Style.RESET_ALL}")
@@ -303,12 +303,12 @@ def cmd_add_malware(args):
         print(f"   File Hash    : {Style.DIM}{data['hash'][:32]}...{Style.RESET_ALL}")
         print(f"   Timestamp    : {Style.DIM}{block['timestamp']}{Style.RESET_ALL}\n")
     except Exception as e:
-        print(f"\n{Fore.RED}❌ Failed to log malware: {e}{Style.RESET_ALL}\n")
+        print(f"\n{Fore.RED}[-] Failed to log malware: {e}{Style.RESET_ALL}\n")
  
  
 def cmd_chain(args):
     chain = load_chain()
-    print(f"\n{Fore.CYAN}{Style.BRIGHT}⛓  NullBlock Chain — {len(chain)} blocks{Style.RESET_ALL}\n")
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}== NullBlock Chain — {len(chain)} blocks =={Style.RESET_ALL}\n")
     for block in chain:
         t = block["type"]
         color = Fore.CYAN if t == "GENESIS" else Fore.RED if t == "THREAT" else Fore.MAGENTA
@@ -324,18 +324,18 @@ def cmd_chain(args):
         elif t == "MALWARE":
             d = block["data"]
             print(f"  Malware      : {d.get('name')}  |  Family: {d.get('family')}  |  Hash: {d.get('hash','')[:24]}...")
-        print(f"  {'─'*70}")
+        print(f"  {'-'*70}")
     print()
  
  
 def cmd_validate(args):
     chain = load_chain()
-    print(f"\n{Fore.CYAN}🔍 Validating NullBlock chain ({len(chain)} blocks)...{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}[*] Validating NullBlock chain ({len(chain)} blocks)...{Style.RESET_ALL}")
     is_valid, message = validate_chain(chain)
     if is_valid:
-        print(f"{Fore.GREEN}✅ {message}{Style.RESET_ALL}\n")
+        print(f"{Fore.GREEN}[+] {message}{Style.RESET_ALL}\n")
     else:
-        print(f"{Fore.RED}❌ CHAIN COMPROMISED: {message}{Style.RESET_ALL}\n")
+        print(f"{Fore.RED}[-] CHAIN COMPROMISED: {message}{Style.RESET_ALL}\n")
  
  
 def cmd_search(args):
@@ -351,10 +351,10 @@ def cmd_search(args):
             results.append(block)
  
     if not results:
-        print(f"\n{Fore.YELLOW}⚠  No matching records found.{Style.RESET_ALL}\n")
+        print(f"\n{Fore.YELLOW}[!] No matching records found.{Style.RESET_ALL}\n")
         return
  
-    print(f"\n{Fore.CYAN}🔎 Found {len(results)} record(s):{Style.RESET_ALL}\n")
+    print(f"\n{Fore.CYAN}[*] Found {len(results)} record(s):{Style.RESET_ALL}\n")
     for block in results:
         print(f"  Block #{block['index']}  |  {block['type']}  |  {block['timestamp']}")
         print(f"  Hash   : {Fore.YELLOW}{block['hash'][:48]}...{Style.RESET_ALL}")
@@ -382,7 +382,7 @@ def cmd_stats(args):
         f = b["data"].get("family", "UNKNOWN")
         families[f] = families.get(f, 0) + 1
  
-    print(f"\n{Fore.CYAN}{Style.BRIGHT}📊 NullBlock Statistics{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}=== NullBlock Statistics ==={Style.RESET_ALL}")
     print(f"   Total Blocks     : {Fore.WHITE}{len(chain)}{Style.RESET_ALL}")
     print(f"   Threat Records   : {Fore.RED}{len(threats)}{Style.RESET_ALL}")
     print(f"   Malware Records  : {Fore.MAGENTA}{len(malware)}{Style.RESET_ALL}")
