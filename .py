@@ -406,7 +406,10 @@ def cmd_stats(args):
 # ─────────────────────────────────────────
  
 def main():
-    print(BANNER)
+    try:
+        print(BANNER)
+    except UnicodeEncodeError:
+        print(f"\n{Fore.CYAN}{Style.BRIGHT}=== NULLBLOCK IMMUTABLE LEDGER ==={Style.RESET_ALL}\n")
     parser = argparse.ArgumentParser(
         prog="nullblock",
         description="NullBlock — Immutable Threat Intelligence Ledger"
