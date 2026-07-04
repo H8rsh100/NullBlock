@@ -57,9 +57,21 @@ pip install colorama
 ---
 
 ## 💻 CLI Usage
-
-### Log a Network Threat
-
+ 
+### 1. Register a Threat Analyst (Generates RSA Keypair)
+ 
+Before logging threats, you must register an analyst. This creates a secure 2048-bit RSA keypair under `analysts/<name>/` used to sign blocks.
+ 
+```bash
+python nullblock_cli.py register-analyst --name "Alice"
+```
+ 
+---
+ 
+### 2. Log a Network Threat (Signed by Analyst)
+ 
+Every block must be signed by a registered analyst. Use the analyst's registered name in `--reporter`.
+ 
 ```bash
 python nullblock_cli.py add-threat \
   --ip 192.168.1.105 \
@@ -67,81 +79,82 @@ python nullblock_cli.py add-threat \
   --severity HIGH \
   --port 3306 \
   --protocol TCP \
-  --reporter "SOC-Team" \
+  --reporter "Alice" \
   --notes "Repeated attempts on MySQL port"
 ```
-
+ 
 Severity levels: `LOW` | `MEDIUM` | `HIGH` | `CRITICAL`
-
+ 
 ---
-
-### Log a Malware Signature
-
+ 
+### 3. Log a Malware Signature (Signed by Analyst)
+ 
 ```bash
 python nullblock_cli.py add-malware \
   --hash "5f4dcc3b5aa765d61d8327deb882cf99abc12345" \
   --name "WannaCry" \
   --family "Ransomware" \
   --severity CRITICAL \
-  --reporter "ThreatIntel-01" \
+  --reporter "Alice" \
   --notes "Exploits EternalBlue (MS17-010)"
 ```
-
+ 
 ---
-
-### View Full Blockchain
-
+ 
+### 4. View Full Blockchain
+ 
 ```bash
 python nullblock_cli.py chain
 ```
-
+ 
 ---
-
-### Validate Chain Integrity
-
+ 
+### 5. Validate Chain Integrity (Verifies Signatures)
+ 
 ```bash
 python nullblock_cli.py validate
 ```
-
-> ✅ Returns `CHAIN INTACT` if no tampering detected  
-> ❌ Returns `CHAIN COMPROMISED` with the exact block index if tampered
-
+ 
+> [+] Returns `Chain integrity verified` if all hashes, links, and digital signatures are valid  
+> [-] Returns `CHAIN COMPROMISED` if any block is tampered with, signature is forged, or public key is missing
+ 
 ---
-
-### Search the Ledger
-
+ 
+### 6. Search the Ledger
+ 
 ```bash
 # Search by IP
 python nullblock_cli.py search --ip 192.168.1.105
-
+ 
 # Search by malware name
 python nullblock_cli.py search --name WannaCry
-
+ 
 # Search by hash prefix
 python nullblock_cli.py search --hash 5f4dcc
 ```
-
+ 
 ---
-
-### Threat Statistics
-
+ 
+### 7. Threat Statistics
+ 
 ```bash
 python nullblock_cli.py stats
 ```
-
+ 
 ---
-
+ 
 ## 🌐 Web UI Usage
-
+ 
 1. Open `nullblock.html` in any browser — no internet required
-2. **LOG THREAT** — fill in IP, attack type, severity → Commit to Chain
-3. **LOG MALWARE** — fill in hash, name, family → Commit to Chain
-4. **CHAIN** — full blockchain explorer, newest blocks first
-5. **VALIDATE** — run integrity check on entire chain
-6. **STATS** — visual breakdown of all logged threats
-7. **SEARCH** — search by IP, malware name, or hash prefix
-8. **EXPORT JSON** — download the full chain as a JSON file
-
+2. **ANALYSTS** — register new threat analysts, generating native RSA-PSS keypairs using Web Crypto API (stored in browser `localStorage`)
+3. **LOG THREAT** — select an analyst, fill in IP, attack type, severity → Commit & Sign to Chain
+4. **LOG MALWARE** — select an analyst, fill in hash, name, family → Commit & Sign to Chain
+5. **CHAIN** — full blockchain explorer, showing the index, type, timestamps, SHA-256 SPKI public key fingerprints, and base64 signatures
+6. **VALIDATE** — verify hashes, block links, and RSA signatures of all blocks in-browser
+7. **STATS** — visual breakdown of threat data
+8. **SEARCH** — search by IP, malware name, or hash prefix
+9. **EXPORT JSON** — download the entire chain as a JSON file
+ 
 ---
 
 ## ⛓ How the Blockchain Works
