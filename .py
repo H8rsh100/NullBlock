@@ -236,7 +236,7 @@ def validate_chain(chain: list) -> tuple:
             except Exception as e:
                 return False, f"Block #{i} has an INVALID signature (forgery/corruption detected: {e})"
  
-    return True, "Chain integrity verified — all hashes, links, and signatures valid"
+    return True, "Chain integrity verified - all hashes, links, and signatures valid"
  
  
 # ─────────────────────────────────────────
@@ -308,7 +308,7 @@ def cmd_add_malware(args):
  
 def cmd_chain(args):
     chain = load_chain()
-    print(f"\n{Fore.CYAN}{Style.BRIGHT}== NullBlock Chain — {len(chain)} blocks =={Style.RESET_ALL}\n")
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}== NullBlock Chain - {len(chain)} blocks =={Style.RESET_ALL}\n")
     for block in chain:
         t = block["type"]
         color = Fore.CYAN if t == "GENESIS" else Fore.RED if t == "THREAT" else Fore.MAGENTA
