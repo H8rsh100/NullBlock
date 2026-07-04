@@ -151,6 +151,7 @@ select option{background:var(--surface)}
   <div class="tabs">
     <button class="tab active" onclick="switchTab('log')">LOG THREAT</button>
     <button class="tab" onclick="switchTab('malware')">LOG MALWARE</button>
+    <button class="tab" onclick="switchTab('analysts')">ANALYSTS</button>
     <button class="tab" onclick="switchTab('chain')">CHAIN</button>
     <button class="tab" onclick="switchTab('validate')">VALIDATE</button>
     <button class="tab" onclick="switchTab('stats')">STATS</button>
@@ -178,11 +179,16 @@ select option{background:var(--surface)}
         <div><label>Protocol</label><input id="t-proto" placeholder="TCP / UDP"></div>
       </div>
       <div class="grid2">
-        <div><label>Reporter</label><input id="t-reporter" placeholder="analyst-01, SOC-team..."></div>
+        <div>
+          <label>Reporter *</label>
+          <select id="t-reporter">
+            <option value="">-- SELECT ANALYST --</option>
+          </select>
+        </div>
         <div><label>Notes</label><input id="t-notes" placeholder="Additional context..."></div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-danger" onclick="logThreat()">COMMIT TO CHAIN</button>
+        <button class="btn btn-danger" onclick="logThreat()">COMMIT & SIGN TO CHAIN</button>
         <button class="btn btn-ghost" onclick="clearForm('t')">CLEAR</button>
       </div>
       <div id="t-status" class="status"></div>
@@ -211,14 +217,41 @@ select option{background:var(--surface)}
             <option value="CRITICAL">CRITICAL</option>
           </select>
         </div>
-        <div><label>Reporter</label><input id="m-reporter" placeholder="analyst-01..."></div>
+        <div>
+          <label>Reporter *</label>
+          <select id="m-reporter">
+            <option value="">-- SELECT ANALYST --</option>
+          </select>
+        </div>
       </div>
       <div class="mb"><label>Notes</label><input id="m-notes" placeholder="Behavior, CVE reference, source..."></div>
       <div class="btn-row">
-        <button class="btn btn-green" onclick="logMalware()">COMMIT TO CHAIN</button>
+        <button class="btn btn-green" onclick="logMalware()">COMMIT & SIGN TO CHAIN</button>
         <button class="btn btn-ghost" onclick="clearForm('m')">CLEAR</button>
       </div>
       <div id="m-status" class="status"></div>
+    </div>
+  </div>
+ 
+  <!-- ANALYSTS PANEL -->
+  <div id="panel-analysts" class="panel">
+    <div class="card green">
+      <div class="card-title">Register Threat Analyst</div>
+      <p style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:16px">
+        Generate a unique cryptographic identity (RSA keypair) for a new analyst. Commits require a registered analyst to sign the block, ensuring authenticity and non-repudiation.
+      </p>
+      <div class="mb">
+        <label>Analyst Name / ID *</label>
+        <input id="a-name" placeholder="e.g. analyst-01, SOC-team...">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-green" onclick="registerAnalystUI()">REGISTER ANALYST</button>
+      </div>
+      <div id="a-status" class="status"></div>
+    </div>
+    <div class="card" id="analysts-list-card" style="display:none">
+      <div class="card-title">Registered Analysts</div>
+      <div id="analysts-list" style="font-size:11px;color:var(--text2);line-height:1.8"></div>
     </div>
   </div>
  
@@ -276,6 +309,7 @@ select option{background:var(--surface)}
 <script>
 // ── Chain storage (localStorage-backed) ──
 const CHAIN_KEY = 'nullblock_chain';
+const ANALYSTS_KEY = 'nullblock_analysts';
  
 function sha256(str) {
   // Simple SHA256 using SubtleCrypto
@@ -286,7 +320,7 @@ function sha256(str) {
 }
  
 async function computeBlockHash(block) {
-  const copy = Object.fromEntries(Object.entries(block).filter(([k]) => k !== 'hash'));
+  const copy = Object.fromEntries(Object.entries(block).filter(([k]) => k !== 'hash' && k !== 'signature'));
   const str = JSON.stringify(copy, Object.keys(copy).sort());
   return await sha256(str);
 }
@@ -321,18 +355,125 @@ async function initChain() {
   return chain;
 }
  
-async function addBlock(data, type) {
+// ── Analyst Cryptography & Management ──
+function loadAnalysts() {
+  const raw = localStorage.getItem(ANALYSTS_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+ 
+function saveAnalysts(analysts) {
+  localStorage.setItem(ANALYSTS_KEY, JSON.stringify(analysts));
+  updateReporterDropdowns();
+  renderAnalystsList();
+}
+ 
+function updateReporterDropdowns() {
+  const analysts = loadAnalysts();
+  const options = ['<option value="">-- SELECT ANALYST --</option>', ...Object.keys(analysts).map(name => `<option value="${name}">${name}</option>`)].join('');
+  
+  const tRep = document.getElementById('t-reporter');
+  const mRep = document.getElementById('m-reporter');
+  if (tRep) tRep.innerHTML = options;
+  if (mRep) mRep.innerHTML = options;
+}
+ 
+function renderAnalystsList() {
+  const analysts = loadAnalysts();
+  const el = document.getElementById('analysts-list');
+  const card = document.getElementById('analysts-list-card');
+  const keys = Object.keys(analysts);
+  
+  if (keys.length === 0) {
+    if (card) card.style.display = 'none';
+    return;
+  }
+  if (card) card.style.display = 'block';
+  if (el) {
+    el.innerHTML = keys.map(name => `
+      <div style="border-bottom:1px solid var(--border);padding:8px 0">
+        <strong style="color:var(--text)">${name}</strong><br>
+        <span style="font-size:9px;color:var(--text2);word-break:break-all">Fingerprint: ${analysts[name].fingerprint}</span>
+      </div>
+    `).join('');
+  }
+}
+ 
+async function registerAnalystUI() {
+  const name = document.getElementById('a-name').value.trim();
+  if (!name) { showStatus('a-status', 'err', 'Analyst name is required.'); return; }
+  const analysts = loadAnalysts();
+  if (analysts[name]) { showStatus('a-status', 'err', 'Analyst already registered.'); return; }
+  
+  showStatus('a-status', 'ok', 'Generating RSA-PSS 2048-bit keypair...');
+  try {
+    const kp = await window.crypto.subtle.generateKey(
+      {
+        name: "RSA-PSS",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256"
+      },
+      true,
+      ["sign", "verify"]
+    );
+    const privJwk = await window.crypto.subtle.exportKey("jwk", kp.privateKey);
+    const pubJwk = await window.crypto.subtle.exportKey("jwk", kp.publicKey);
+    
+    const spki = await window.crypto.subtle.exportKey("spki", kp.publicKey);
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", spki);
+    const fingerprint = "SHA256:" + Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+    
+    analysts[name] = {
+      privateKey: privJwk,
+      publicKey: pubJwk,
+      fingerprint: fingerprint
+    };
+    saveAnalysts(analysts);
+    document.getElementById('a-name').value = '';
+    showStatus('a-status', 'ok', `✓ Analyst '${name}' registered successfully!`);
+  } catch (e) {
+    showStatus('a-status', 'err', 'Failed to generate keypair: ' + e.message);
+  }
+}
+ 
+async function addBlock(data, type, reporter) {
   const chain = loadChain();
   const prev = chain[chain.length - 1];
+  
+  const analysts = loadAnalysts();
+  const analyst = analysts[reporter];
+  if (!analyst) throw new Error("Reporter private key not found.");
+  
   const block = {
     index: chain.length,
     timestamp: new Date().toISOString(),
     type,
     data,
     previous_hash: prev.hash,
-    nonce: 0
+    nonce: 0,
+    reporter,
+    reporter_fingerprint: analyst.fingerprint
   };
+  
   block.hash = await computeBlockHash(block);
+  
+  const privKey = await window.crypto.subtle.importKey(
+    "jwk",
+    analyst.privateKey,
+    { name: "RSA-PSS", hash: "SHA-256" },
+    true,
+    ["sign"]
+  );
+  
+  const encoder = new TextEncoder();
+  const sigBuffer = await window.crypto.subtle.sign(
+    { name: "RSA-PSS", saltLength: 32 },
+    privKey,
+    encoder.encode(block.hash)
+  );
+  
+  block.signature = btoa(String.fromCharCode(...new Uint8Array(sigBuffer)));
+  
   chain.push(block);
   saveChain(chain);
   return block;
@@ -345,12 +486,19 @@ function updateHeaderCount() {
  
 // ── Tab switching ──
 function switchTab(t) {
-  const tabs = ['log','malware','chain','validate','stats','search'];
-  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', tabs[i] === t));
-  document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
-  document.getElementById('panel-' + t).classList.add('active');
+  const tabs = ['log','malware','analysts','chain','validate','stats','search'];
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    if (el) el.classList.toggle('active', tabs[i] === t);
+  });
+  document.querySelectorAll('.panel').forEach(el => {
+    if (el) el.classList.remove('active');
+  });
+  const activePanel = document.getElementById('panel-' + t);
+  if (activePanel) activePanel.classList.add('active');
+  
   if (t === 'chain') renderChain();
   if (t === 'stats') renderStats();
+  if (t === 'analysts') renderAnalystsList();
 }
  
 // ── Log Threat ──
@@ -358,17 +506,21 @@ async function logThreat() {
   const ip = document.getElementById('t-ip').value.trim();
   const type = document.getElementById('t-type').value.trim();
   const sev = document.getElementById('t-sev').value;
-  if (!ip || !type) { showStatus('t-status','err','IP address and attack type are required.'); return; }
+  const reporter = document.getElementById('t-reporter').value;
+  if (!ip || !type || !reporter) { showStatus('t-status','err','IP address, attack type, and reporter are required.'); return; }
   const data = {
     ip_address: ip, attack_type: type, severity: sev,
     port: document.getElementById('t-port').value || 'unknown',
     protocol: document.getElementById('t-proto').value || 'unknown',
-    reporter: document.getElementById('t-reporter').value || 'anonymous',
     notes: document.getElementById('t-notes').value || ''
   };
-  const block = await addBlock(data, 'THREAT');
-  showStatus('t-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
-  clearForm('t');
+  try {
+    const block = await addBlock(data, 'THREAT', reporter);
+    showStatus('t-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
+    clearForm('t');
+  } catch (e) {
+    showStatus('t-status','err','Commit failed: ' + e.message);
+  }
 }
  
 // ── Log Malware ──
@@ -376,17 +528,21 @@ async function logMalware() {
   const hash = document.getElementById('m-hash').value.trim();
   const name = document.getElementById('m-name').value.trim();
   const family = document.getElementById('m-family').value.trim();
-  if (!hash || !name || !family) { showStatus('m-status','err','Hash, name and family are required.'); return; }
+  const reporter = document.getElementById('m-reporter').value;
+  if (!hash || !name || !family || !reporter) { showStatus('m-status','err','Hash, name, family, and reporter are required.'); return; }
   const data = {
     hash, name, family,
     hash_type: document.getElementById('m-hashtype').value,
     severity: document.getElementById('m-sev').value,
-    reporter: document.getElementById('m-reporter').value || 'anonymous',
     notes: document.getElementById('m-notes').value || ''
   };
-  const block = await addBlock(data, 'MALWARE');
-  showStatus('m-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
-  clearForm('m');
+  try {
+    const block = await addBlock(data, 'MALWARE', reporter);
+    showStatus('m-status','ok',`✓ Block #${block.index} committed — Hash: ${block.hash.slice(0,24)}...`);
+    clearForm('m');
+  } catch (e) {
+    showStatus('m-status','err','Commit failed: ' + e.message);
+  }
 }
  
 // ── Render Chain ──
@@ -395,7 +551,6 @@ function renderChain() {
   const el = document.getElementById('chain-view');
   if (!chain || chain.length === 0) { el.innerHTML = '<div class="empty">NO BLOCKS YET</div>'; return; }
   el.innerHTML = [...chain].reverse().map((block, i, arr) => {
-    const typeColor = block.type === 'GENESIS' ? 'cyan' : block.type === 'THREAT' ? 'THREAT' : 'MALWARE';
     let dataHTML = '';
     if (block.type === 'THREAT') {
       const d = block.data;
@@ -404,7 +559,7 @@ function renderChain() {
         <div class="data-row"><span class="data-key">attack_type</span><span class="data-val">${d.attack_type}</span></div>
         <div class="data-row"><span class="data-key">severity</span><span class="data-val"><span class="badge badge-${d.severity}">${d.severity}</span></span></div>
         <div class="data-row"><span class="data-key">port</span><span class="data-val">${d.port}</span><span class="data-key" style="margin-left:12px">protocol</span><span class="data-val">${d.protocol}</span></div>
-        ${d.reporter ? `<div class="data-row"><span class="data-key">reporter</span><span class="data-val">${d.reporter}</span></div>` : ''}
+        ${d.notes ? `<div class="data-row"><span class="data-key">notes</span><span class="data-val">${d.notes}</span></div>` : ''}
       `;
     } else if (block.type === 'MALWARE') {
       const d = block.data;
@@ -413,6 +568,7 @@ function renderChain() {
         <div class="data-row"><span class="data-key">family</span><span class="data-val">${d.family}</span></div>
         <div class="data-row"><span class="data-key">hash</span><span class="data-val" style="font-size:9px;color:var(--text2)">${d.hash.slice(0,40)}...</span></div>
         <div class="data-row"><span class="data-key">severity</span><span class="data-val"><span class="badge badge-${d.severity}">${d.severity}</span></span></div>
+        ${d.notes ? `<div class="data-row"><span class="data-key">notes</span><span class="data-val">${d.notes}</span></div>` : ''}
       `;
     } else {
       dataHTML = `<div class="data-row"><span class="data-key">message</span><span class="data-val" style="color:var(--cyan)">${block.data.message}</span></div>`;
@@ -427,6 +583,10 @@ function renderChain() {
         </div>
         <div class="hash-line">HASH &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span>${block.hash}</span></div>
         <div class="hash-line">PREV HASH : <span>${block.previous_hash}</span></div>
+        ${block.type !== 'GENESIS' ? `
+          <div class="hash-line">REPORTER &nbsp;: <span style="color:var(--text)">${block.reporter} (${block.reporter_fingerprint ? block.reporter_fingerprint.slice(0,20) : 'N/A'}...)</span></div>
+          <div class="hash-line">SIGNATURE : <span style="font-size:8px;color:var(--text2);word-break:break-all">${block.signature || 'N/A'}</span></div>
+        ` : ''}
         <div class="block-data">${dataHTML}</div>
       </div>
     `;
@@ -440,12 +600,41 @@ async function validateChain() {
   const iconEl = document.getElementById('v-icon');
   const msgEl = document.getElementById('v-msg');
   let valid = true, errMsg = '';
+  const analysts = loadAnalysts();
+  
   for (let i = 1; i < chain.length; i++) {
     const cur = chain[i];
     const prev = chain[i - 1];
     const expected = await computeBlockHash(cur);
     if (cur.hash !== expected) { valid = false; errMsg = `Block #${i} hash is CORRUPTED`; break; }
     if (cur.previous_hash !== prev.hash) { valid = false; errMsg = `Block #${i} is DETACHED — previous_hash mismatch`; break; }
+    
+    if (cur.type !== 'GENESIS') {
+      if (!cur.signature) { valid = false; errMsg = `Block #${i} is missing digital signature`; break; }
+      const analyst = analysts[cur.reporter];
+      if (!analyst) { valid = false; errMsg = `Block #${i} signature verification failed (Public key for reporter '${cur.reporter}' not found)`; break; }
+      
+      try {
+        const pubKey = await window.crypto.subtle.importKey(
+          "jwk",
+          analyst.publicKey,
+          { name: "RSA-PSS", hash: "SHA-256" },
+          true,
+          ["verify"]
+        );
+        const encoder = new TextEncoder();
+        const sigBytes = Uint8Array.from(atob(cur.signature), c => c.charCodeAt(0));
+        const verified = await window.crypto.subtle.verify(
+          { name: "RSA-PSS", saltLength: 32 },
+          pubKey,
+          sigBytes,
+          encoder.encode(cur.hash)
+        );
+        if (!verified) { valid = false; errMsg = `Block #${i} signature is INVALID (forged/corrupted)`; break; }
+      } catch (e) {
+        valid = false; errMsg = `Block #${i} signature verification error: ${e.message}`; break;
+      }
+    }
   }
   resultEl.className = `validate-result ${valid ? 'ok' : 'err'}`;
   resultEl.style.display = 'block';
@@ -453,7 +642,7 @@ async function validateChain() {
   iconEl.style.color = valid ? 'var(--green)' : 'var(--accent)';
   msgEl.style.color = valid ? 'var(--green)' : 'var(--accent)';
   msgEl.textContent = valid
-    ? `CHAIN INTACT — All ${chain.length} blocks verified`
+    ? `CHAIN INTACT — All ${chain.length} blocks, links, and signatures successfully verified`
     : `CHAIN COMPROMISED — ${errMsg}`;
 }
  
@@ -517,7 +706,11 @@ function searchChain() {
         <span class="badge badge-${block.type}">${block.type}</span>
         <div class="block-ts" style="margin-left:auto">${block.timestamp.replace('T',' ').slice(0,19)}</div>
       </div>
-      <div class="hash-line" style="margin-bottom:8px">HASH : <span style="color:var(--accent2)">${block.hash.slice(0,48)}...</span></div>
+      <div class="hash-line" style="margin-bottom:4px">HASH &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:var(--accent2)">${block.hash.slice(0,48)}...</span></div>
+      ${block.type !== 'GENESIS' ? `
+        <div class="hash-line" style="margin-bottom:4px">REPORTER : <span style="color:var(--text)">${block.reporter}</span></div>
+        <div class="hash-line" style="margin-bottom:8px">SIGNATURE: <span style="font-size:8px;color:var(--text2);word-break:break-all">${block.signature ? block.signature.slice(0,60) : 'N/A'}...</span></div>
+      ` : ''}
       <div style="font-size:11px;color:var(--text2)">${JSON.stringify(block.data, null, 2).replace(/\n/g,'<br>').replace(/ /g,'&nbsp;')}</div>
     </div>
   `).join('');
@@ -526,16 +719,21 @@ function searchChain() {
 // ── Utilities ──
 function showStatus(id, type, msg) {
   const el = document.getElementById(id);
-  el.className = 'status ' + type;
-  el.textContent = msg;
-  setTimeout(() => { el.className = 'status'; }, 5000);
+  if (el) {
+    el.className = 'status ' + type;
+    el.textContent = msg;
+    setTimeout(() => { el.className = 'status'; }, 5000);
+  }
 }
  
 function clearForm(prefix) {
   const ids = prefix === 't'
-    ? ['t-ip','t-type','t-port','t-proto','t-reporter','t-notes']
-    : ['m-hash','m-name','m-family','m-reporter','m-notes'];
+    ? ['t-ip','t-type','t-port','t-proto','t-notes']
+    : ['m-hash','m-name','m-family','m-notes'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  
+  const repEl = document.getElementById(prefix + '-reporter');
+  if (repEl) repEl.value = '';
 }
  
 function exportChain() {
@@ -548,7 +746,10 @@ function exportChain() {
 }
  
 // ── Init ──
-initChain();
+initChain().then(() => {
+  updateReporterDropdowns();
+  renderAnalystsList();
+});
 </script>
 </body>
 </html>
