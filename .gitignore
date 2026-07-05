@@ -3,3 +3,6 @@ nullblock_chain.json
 patent_draft_final.txt
 patentdraft*.txt
 patentdraft_extracted.txt
+.vscode/
+NullBlock_extracted_text.txt
+
