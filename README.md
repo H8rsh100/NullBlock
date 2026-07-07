@@ -1,29 +1,29 @@
 # ⛓ NullBlock
 
 > **Immutable Threat Intelligence Ledger**  
-> A custom blockchain for logging cybersecurity threats — tamper-proof, verifiable, permanent.
+> A custom blockchain for logging cybersecurity threats - tamper-proof, verifiable, permanent.
 
-![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat&logo=python&logoColor=white)
-![Blockchain](https://img.shields.io/badge/Blockchain-Custom%20SHA--256-ff3c3c?style=flat)
-![Storage](https://img.shields.io/badge/Storage-JSON%20%7C%20localStorage-ff7b00?style=flat)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat)
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
+[![Blockchain](https://img.shields.io/badge/Blockchain-Custom%20SHA--256-ff3c3c?style=flat)
+[![Storage](https://img.shields.io/badge/Storage-JSON%20%7C%20localStorage-ff7b00?style=flat)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat)
 
 ---
 
 ## 📌 What is NullBlock?
 
-NullBlock is a **custom blockchain implementation** built for cybersecurity use cases. Every threat record — whether a malicious IP address, an attack event, or a malware signature — is stored as an **immutable block** on a chain. Once written, it cannot be altered without breaking the entire chain, which is immediately detected by the validator.
+NullBlock is a **custom blockchain implementation** built for cybersecurity use cases. Every threat record - whether a malicious IP address, an attack event, or a malware signature - is stored as an **immutable block** on a chain. Once written, it cannot be altered without breaking the entire chain, which is immediately detected by the validator.
 
 This is the exact principle behind why blockchain is powerful for security: **tamper-evidence**. If anyone modifies a historical record, the SHA-256 hash chain breaks and the corruption is provable.
 
 ### What gets logged?
-- **Network Threats** — Source IPs, attack types (SQL Injection, DDoS, XSS...), severity levels, ports, protocols
-- **Malware Signatures** — File hashes, malware names, families (Ransomware, Trojan, Botnet...), hash types
+- **Network Threats** - Source IPs, attack types (SQL Injection, DDoS, XSS...), severity levels, ports, protocols
+- **Malware Signatures** - File hashes, malware names, families (Ransomware, Trojan, Botnet...), hash types
 
 ### Two interfaces:
-- **Python CLI** — Terminal-based, stores chain as `nullblock_chain.json`
-- **Web UI** — Browser-based explorer, stores chain in `localStorage`, fully offline
+- **Python CLI** - Terminal-based, stores chain as `nullblock_chain.json`
+- **Web UI** - Browser-based explorer, stores chain in `localStorage`, fully offline
 
 ---
 
@@ -145,15 +145,15 @@ python nullblock_cli.py stats
  
 ## 🌐 Web UI Usage
  
-1. Open `nullblock.html` in any browser — no internet required
-2. **ANALYSTS** — register new threat analysts, generating native RSA-PSS keypairs using Web Crypto API (stored in browser `localStorage`)
-3. **LOG THREAT** — select an analyst, fill in IP, attack type, severity → Commit & Sign to Chain
-4. **LOG MALWARE** — select an analyst, fill in hash, name, family → Commit & Sign to Chain
-5. **CHAIN** — full blockchain explorer, showing the index, type, timestamps, SHA-256 SPKI public key fingerprints, and base64 signatures
-6. **VALIDATE** — verify hashes, block links, and RSA signatures of all blocks in-browser
-7. **STATS** — visual breakdown of threat data
-8. **SEARCH** — search by IP, malware name, or hash prefix
-9. **EXPORT JSON** — download the entire chain as a JSON file
+1. Open `nullblock.html` in any browser - no internet required
+2. **ANALYSTS** - register new threat analysts, generating native RSA-PSS keypairs using Web Crypto API (stored in browser `localStorage`)
+3. **LOG THREAT** - select an analyst, fill in IP, attack type, severity -> Commit & Sign to Chain
+4. **LOG MALWARE** - select an analyst, fill in hash, name, family -> Commit & Sign to Chain
+5. **CHAIN** - full blockchain explorer, showing the index, type, timestamps, SHA-256 SPKI public key fingerprints, and base64 signatures
+6. **VALIDATE** - verify hashes, block links, and RSA signatures of all blocks in-browser
+7. **STATS** - visual breakdown of threat data
+8. **SEARCH** - search by IP, malware name, or hash prefix
+9. **EXPORT JSON** - download the entire chain as a JSON file
  
 ---
 
@@ -193,7 +193,7 @@ python nullblock_cli.py stats
 
 ---
 
-### The Hash Chain — Why It's Immutable
+### The Hash Chain - Why It's Immutable
 
 ```
 GENESIS BLOCK           BLOCK #1                BLOCK #2
@@ -208,8 +208,8 @@ GENESIS BLOCK           BLOCK #1                BLOCK #2
 
 Each block's hash is computed from ALL its contents including the `previous_hash`. This means:
 
-- Change Block #1's data → its hash changes
-- Block #2's `previous_hash` no longer matches → invalid
+- Change Block #1's data -> its hash changes
+- Block #2's `previous_hash` no longer matches -> invalid
 - Every block after is also invalid
 - Validator catches this instantly
 
@@ -226,7 +226,7 @@ def compute_hash(block):
     return hashlib.sha256(block_string.encode()).hexdigest()
 ```
 
-Block serialized to JSON with sorted keys (determinism) → SHA-256 hashed. The `hash` field is excluded to avoid circular dependency.
+Block serialized to JSON with sorted keys (determinism) -> SHA-256 hashed. The `hash` field is excluded to avoid circular dependency.
 
 ---
 
@@ -254,7 +254,7 @@ Two checks per block. O(n) time. Catches both content tampering and chain relink
 
 | Concept | How NullBlock Uses It |
 |---------|----------------------|
-| **Immutability** | SHA-256 hash chain — any edit breaks all subsequent blocks |
+| **Immutability** | SHA-256 hash chain - any edit breaks all subsequent blocks |
 | **Tamper Evidence** | Validator detects and pinpoints exact corrupted block |
 | **Cryptographic Hashing** | SHA-256 produces a fixed 256-bit fingerprint of each block |
 | **Chain of Custody** | Every record has timestamp, reporter, and cryptographic proof |
@@ -267,11 +267,11 @@ Two checks per block. O(n) time. Catches both content tampering and chain relink
 
 ## 🔗 Real-World Parallels
 
-- **MITRE ATT&CK** — globally shared threat intelligence framework
-- **VirusTotal** — crowdsourced malware hash database
-- **Blockchain-based PKI** — immutability preventing certificate fraud
-- **SIEM audit logs** — tamper-evident security event logs in enterprise SOCs
-- **Ethereum event logs** — smart contract events stored immutably on-chain
+- **MITRE ATT&CK** - globally shared threat intelligence framework
+- **VirusTotal** - crowdsourced malware hash database
+- **Blockchain-based PKI** - immutability preventing certificate fraud
+- **SIEM audit logs** - tamper-evident security event logs in enterprise SOCs
+- **Ethereum event logs** - smart contract events stored immutably on-chain
 
 NullBlock demonstrates the **core principle** behind all of these: once written to the chain, data cannot be quietly changed.
 
@@ -279,20 +279,20 @@ NullBlock demonstrates the **core principle** behind all of these: once written 
 
 ## ⚠️ Notes
 
-- Web UI stores data in `localStorage` — use **Export JSON** to back up before clearing browser data
-- CLI stores chain in `nullblock_chain.json` — back this file up
-- This is a **simplified blockchain** — no P2P network, no consensus, no proof-of-work mining
+- Web UI stores data in `localStorage` - use **Export JSON** to back up before clearing browser data
+- CLI stores chain in `nullblock_chain.json` - back this file up
+- This is a **simplified blockchain** - no P2P network, no consensus, no proof-of-work mining
 - For production threat intel, look into **STIX/TAXII** format and platforms like **OpenCTI** or **MISP**
 
 ---
 
 ## 👤 Author
 
-Built by **[H8RSH100](https://github.com/H8rsh100)** — CS/IT Engineering Student  
+Built by **[H8RSH100](https://github.com/H8rsh100)** - CS/IT Engineering Student  
 Part of a cybersecurity portfolio series alongside **[VaultCipher](https://github.com/H8rsh100/VaultCipher)**.
 
 ---
 
-## 📄 License
+## License
 
-MIT License — free to use, modify, and learn from.
+MIT - see LICENSE.
